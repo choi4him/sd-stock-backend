@@ -38,6 +38,8 @@ class OrderRead(BaseModel):
     unit_price: int
     total_price: int
     stage: OrderStageEnum
+    customer_name: Optional[str] = None
+    strain_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
