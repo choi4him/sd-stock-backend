@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 10mm 12mm 12mm 12mm;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            font-size: 9pt;
+            color: #000;
+            position: relative;
+        }
+
+        /* ── 우상단 결재란 ────────────────────────────────── */
+        .approval-area {
+            position: absolute;
+            top: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2mm;
+        }
+
+        /* 대외비 스탬프 */
+        .confidential-stamp {
+            display: inline-block;
+            border: 2.5px solid #cc0000;
+            color: #cc0000;
+            font-size: 10pt;
+            font-weight: 900;
+            letter-spacing: 2pt;
+            padding: 2mm 4mm;
+            transform: rotate(-15deg);
+            margin-bottom: 2mm;
+        }
+
+        /* 결재 테이블 */
+        .approval-table {
+            border-collapse: collapse;
+            font-size: 7.5pt;
+        }
+
+        .approval-table th {
+            background: #1e3a5f;
+            color: #fff;
+            padding: 1.5mm 3mm;
+            text-align: center;
+            border: 1px solid #1e3a5f;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .approval-table td {
+            border: 1px solid #555;
+            width: 22mm;
+            height: 18mm;
+            text-align: center;
+            vertical-align: bottom;
+            padding: 1mm;
+            font-size: 7pt;
+            color: #888;
+        }
+
+        /* ── 문서 제목부 ────────────────────────────────── */
+        .doc-title-section {
+            text-align: center;
+            margin-bottom: 4mm;
+            padding-top: 2mm;
+        }
+
+        .doc-title-main {
+            font-size: 20pt;
+            font-weight: 900;
+            letter-spacing: 6pt;
+            margin-bottom: 2mm;
+        }
+
+        /* ── 서브헤더 ───────────────────────────────────── */
+        .subheader {
+            display: flex;
+            gap: 8mm;
+            justify-content: center;
+            font-size: 9.5pt;
+            margin-bottom: 4mm;
+            border-top: 1.5px solid #333;
+            border-bottom: 1.5px solid #333;
+            padding: 2mm 0;
+        }
+
+        .subheader-field {
+            display: flex;
+            align-items: center;
+            gap: 2mm;
+        }
+
+        .subheader-field .lbl {
+            font-weight: 700;
+        }
+
+        .subheader-field .val {
+            min-width: 30mm;
+            border-bottom: 1px solid #555;
+            padding-bottom: 0.5mm;
+        }
+
+        /* ── 메인 테이블 ───────────────────────────────── */
+        .main-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8.5pt;
+        }
+
+        /* 그룹 헤더 행 */
+        .main-table .group-header th {
+            background: #1e3a5f;
+            color: #fff;
+            text-align: center;
+            padding: 2mm 1.5mm;
+            border: 1px solid #1e3a5f;
+            font-weight: 700;
+        }
+
+        /* 서브 헤더 행 */
+        .main-table .col-header th {
+            background: #3b5f8c;
+            color: #fff;
+            text-align: center;
+            padding: 1.5mm 1mm;
+            border: 1px solid #3b5f8c;
+            font-size: 7.5pt;
+        }
+
+        /* 데이터 행 */
+        .main-table tbody td {
+            border: 1px solid #aaa;
+            text-align: center;
+            vertical-align: middle;
+            padding: 1.5mm 1mm;
+            min-height: 7mm;
+            height: 7mm;
+        }
+
+        .main-table .age-col {
+            font-weight: 700;
+            background: #f0f4ff;
+        }
+
+        .main-table .dob-col {
+            font-size: 7pt;
+            color: #555;
+            min-width: 20mm;
+        }
+
+        .main-table .input-cell {
+            background: #fffdf0;
+        }
+
+        .main-table .readonly-cell {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        /* 합계 행 */
+        .main-table .total-row td {
+            background: #e8efff !important;
+            font-weight: 700;
+            border-top: 2px solid #1e3a5f;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- 결재란 (우상단) -->
+    <div class="approval-area">
+        <div class="confidential-stamp">대 외 비</div>
+        <table class="approval-table">
+            <thead>
+                <tr>
+                    <th>담당</th>
+                    <th>방장</th>
+                    <th>파트장</th>
+                    <th>생산팀장</th>
+                    <th>센터장</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 제목 -->
+    <div class="doc-title-section">
+        <div class="doc-title-main">STOCK MANAGEMENT</div>
+    </div>
+
+    <!-- 서브헤더 -->
+    <div class="subheader">
+        <div class="subheader-field">
+            <span class="lbl">Area:</span>
+            <span class="val">{{ header.area | default('') }}</span>
+        </div>
+        <div class="subheader-field">
+            <span class="lbl">Strain:</span>
+            <span class="val">{{ header.strain_code | default('') }}</span>
+        </div>
+        <div class="subheader-field">
+            <span class="lbl">Responsible Person:</span>
+            <span class="val">{{ header.responsible_person | default('') }}</span>
+        </div>
+        <div class="subheader-field">
+            <span class="lbl">Date:</span>
+            <span class="val">{{ header.record_date | default('') }}</span>
+        </div>
+    </div>
+
+    <!-- 메인 테이블 -->
+    <table class="main-table">
+        <thead>
+            <tr class="group-header">
+                <th rowspan="2" style="width:8mm">Age</th>
+                <th rowspan="2" style="width:22mm">Date of Birth</th>
+                <th colspan="6">Male</th>
+                <th colspan="6">Female</th>
+            </tr>
+            <tr class="col-header">
+                <th>Stock</th>
+                <th>Cage<br>(S/M/L)</th>
+                <th>No. of<br>Appoint</th>
+                <th>Rest</th>
+                <th>Adjust<br>Cut</th>
+                <th>Remark</th>
+                <th>Stock</th>
+                <th>Cage<br>(S/M/L)</th>
+                <th>No. of<br>Appoint</th>
+                <th>Rest</th>
+                <th>Adjust<br>Cut</th>
+                <th>Remark</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr{% if row.is_total %} class="total-row" {% endif %}>
+                <td class="age-col">{{ row.age_label }}</td>
+                <td class="dob-col">
+                    {% if row.dob_start %}{{ row.dob_start }}{% if row.dob_end %}&nbsp;~&nbsp;{{ row.dob_end }}{% endif
+                    %}{% endif %}
+                </td>
+                <!-- Male -->
+                <td class="{% if row.is_total %}{% else %}input-cell{% endif %}">{{ row.male.stock | default('') }}</td>
+                <td class="{% if row.is_total %}{% else %}input-cell{% endif %}">
+                    {% if row.male.cage_s is defined %}{{ row.male.cage_s }}/{{ row.male.cage_m }}/{{ row.male.cage_l
+                    }}{% endif %}
+                </td>
+                <td class="readonly-cell">{{ row.male.appoint | default('') }}</td>
+                <td class="readonly-cell">{{ row.male.rest | default('') }}</td>
+                <td class="{% if row.is_total %}{% else %}input-cell{% endif %}">{{ row.male.adjust_cut | default('') }}
+                </td>
+                <td class="{% if row.is_total %}{% else %}input-cell{% endif %}" style="min-width:20mm">{{
+                    row.male.remark | default('') }}</td>
+                <!-- Female -->
+                <td class="{% if row.is_total %}{% else %}input-cell{% endif %}">{{ row.female.stock | default('') }}
+                </td>
+                <td class="{% if row.is_total %}{% else %}input-cell{% endif %}">
+                    {% if row.female.cage_s is defined %}{{ row.female.cage_s }}/{{ row.female.cage_m }}/{{
+                    row.female.cage_l }}{% endif %}
+                </td>
+                <td class="readonly-cell">{{ row.female.appoint | default('') }}</td>
+                <td class="readonly-cell">{{ row.female.rest | default('') }}</td>
+                <td class="{% if row.is_total %}{% else %}input-cell{% endif %}">{{ row.female.adjust_cut | default('')
+                    }}</td>
+                <td class="{% if row.is_total %}{% else %}input-cell{% endif %}" style="min-width:20mm">{{
+                    row.female.remark | default('') }}</td>
+                </tr>
+                {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 12mm 15mm;
+
+            @bottom-right {
+                content: "발행: {{ issued_date }}  |  OBI LABS";
+                font-size: 8pt;
+                color: #888;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            font-size: 10pt;
+            color: #111;
+        }
+
+        /* 제목 */
+        .sheet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 6mm;
+        }
+
+        .sheet-title {
+            font-size: 20pt;
+            font-weight: 900;
+            letter-spacing: 2pt;
+        }
+
+        .sheet-meta {
+            font-size: 9pt;
+            color: #555;
+            text-align: right;
+            line-height: 1.7;
+        }
+
+        /* 테이블 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+        }
+
+        thead tr th {
+            background: #1e3a5f;
+            color: #fff;
+            padding: 2.5mm 2mm;
+            font-weight: 700;
+            text-align: center;
+            border: 1px solid #1e3a5f;
+        }
+
+        tbody tr td {
+            border: 1px solid #bbb;
+            padding: 2mm 2mm;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        tbody tr:nth-child(odd) td {
+            background: #fff;
+        }
+
+        tbody tr:nth-child(even) td {
+            background: #f4f6fa;
+        }
+
+        .text-left {
+            text-align: left;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        /* 합계 */
+        .grand-total td {
+            background: #e8efff !important;
+            font-weight: 700;
+            border-top: 2px solid #1e3a5f;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sheet-header">
+        <div>
+            <div class="sheet-title">배 송 지 시 서</div>
+        </div>
+        <div class="sheet-meta">
+            <strong>OBI LABS</strong><br>
+            출고일: {{ target_date }}<br>
+            발행: {{ issued_date }}
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width:5%">순번</th>
+                <th style="width:18%">거래처</th>
+                <th style="width:25%">배송지 주소</th>
+                <th style="width:10%">Strain</th>
+                <th style="width:7%">주령</th>
+                <th style="width:5%">성별</th>
+                <th style="width:7%">수량</th>
+                <th style="width:7%">EXTRA</th>
+                <th class="text-left" style="width:16%">비고</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td class="text-left"><strong>{{ item.customer_name }}</strong></td>
+                <td class="text-left" style="font-size:8.5pt">{{ item.shipping_address | default('—') }}</td>
+                <td>{{ item.strain_code }}</td>
+                <td>{{ item.age_week }}W</td>
+                <td>{{ '♂' if item.sex == 'M' else '♀' }}</td>
+                <td><strong>{{ item.quantity }}</strong></td>
+                <td>{{ item.extra_quantity | default('') }}</td>
+                <td class="text-left" style="font-size:8.5pt">{{ item.remark | default('') }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="grand-total">
+                <td colspan="6" class="text-right">총 합계</td>
+                <td><strong>{{ items | sum(attribute='quantity') }}</strong></td>
+                <td></td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+
+</body>
+
+</html>

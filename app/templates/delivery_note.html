@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+  /* ── Page Setup ─────────────────────────────────── */
+  @page {
+    size: A4;
+    margin: 15mm 15mm 20mm 15mm;
+    @bottom-center {
+      content: "- " counter(page) " / " counter(pages) " -";
+      font-size: 9pt;
+      color: #666;
+    }
+  }
+
+  /* ── Base ───────────────────────────────────────── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    font-size: 10pt;
+    color: #111;
+  }
+
+  /* ── 거래처 블록 (페이지 나눔) ────────────────────── */
+  .order-block {
+    page-break-after: always;
+    padding-top: 5mm;
+  }
+  .order-block:last-child {
+    page-break-after: auto;
+  }
+
+  /* ── 발행 정보 / 헤더 ────────────────────────────── */
+  .doc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8mm;
+  }
+  .doc-title {
+    font-size: 24pt;
+    font-weight: 900;
+    letter-spacing: 2pt;
+  }
+  .doc-meta {
+    text-align: right;
+    font-size: 9pt;
+    color: #444;
+    line-height: 1.7;
+  }
+
+  /* ── 거래처 정보 블록 ────────────────────────────── */
+  .customer-info {
+    border: 1.5px solid #333;
+    border-radius: 3px;
+    padding: 4mm 5mm;
+    margin-bottom: 5mm;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2mm 4mm;
+    font-size: 10pt;
+  }
+  .customer-info .field-row {
+    display: flex;
+    gap: 3mm;
+  }
+  .customer-info .field-label {
+    font-weight: 700;
+    min-width: 55pt;
+    color: #444;
+  }
+  .customer-info .field-value {
+    color: #111;
+  }
+
+  /* ── 품목 테이블 ─────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+  thead tr th {
+    background: #1e3a5f;
+    color: #fff;
+    padding: 3mm 2mm;
+    font-weight: 700;
+    text-align: center;
+    border: 1px solid #1e3a5f;
+  }
+  tbody tr td {
+    border: 1px solid #aaa;
+    padding: 2.5mm 2mm;
+    text-align: center;
+    vertical-align: middle;
+  }
+  tbody tr:nth-child(even) td {
+    background: #f7f8fa;
+  }
+  .total-row td {
+    background: #eef2ff !important;
+    font-weight: 700;
+    border-top: 2px solid #1e3a5f;
+  }
+  .text-left { text-align: left; }
+
+  /* ── 푸터 ────────────────────────────────────────── */
+  .footer-note {
+    margin-top: 6mm;
+    border-top: 1px solid #ccc;
+    padding-top: 3mm;
+    font-size: 8.5pt;
+    color: #555;
+    line-height: 1.6;
+  }
+  .footer-note .note-label {
+    font-weight: 700;
+    color: #333;
+  }
+</style>
+</head>
+<body>
+
+{% for order in orders %}
+<div class="order-block">
+
+  <!-- 헤더 -->
+  <div class="doc-header">
+    <div>
+      <div class="doc-title">납 품 장</div>
+    </div>
+    <div class="doc-meta">
+      <strong>OBI LABS</strong><br>
+      발행일: {{ issued_date }}<br>
+      담당: {{ order.sales_person | default('—') }}<br>
+      Tel: {{ company_info.tel | default('—') }}
+    </div>
+  </div>
+
+  <!-- 거래처 정보 -->
+  <div class="customer-info">
+    <div class="field-row">
+      <span class="field-label">거 래 처</span>
+      <span class="field-value">{{ order.customer_name }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">납 품 일</span>
+      <span class="field-value">{{ order.delivery_date }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">교수 / 담당</span>
+      <span class="field-value">{{ order.contact_person | default('—') }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">배  송  지</span>
+      <span class="field-value">{{ order.shipping_address | default('—') }}</span>
+    </div>
+  </div>
+
+  <!-- 품목 테이블 -->
+  <table>
+    <thead>
+      <tr>
+        <th>Strain</th>
+        <th>주령</th>
+        <th>성별</th>
+        <th>S</th>
+        <th>M</th>
+        <th>L</th>
+        <th>수량</th>
+        <th>EXTRA</th>
+        <th class="text-left" style="width:22%">비고</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in order.items %}
+      <tr>
+        <td>{{ item.strain_code }}</td>
+        <td>{{ item.age_week }}W</td>
+        <td>{{ '♂ M' if item.sex == 'M' else '♀ F' }}</td>
+        <td>{{ item.cage_s | default(0) }}</td>
+        <td>{{ item.cage_m | default(0) }}</td>
+        <td>{{ item.cage_l | default(0) }}</td>
+        <td><strong>{{ item.quantity }}</strong></td>
+        <td>{{ item.extra_quantity | default('') }}</td>
+        <td class="text-left">{{ item.remark | default('') }}</td>
+      </tr>
+      {% endfor %}
+      <!-- 소계 -->
+      <tr class="total-row">
+        <td colspan="6" class="text-left">　합계</td>
+        <td><strong>{{ order.items | sum(attribute='quantity') }}</strong></td>
+        <td>{{ order.items | sum(attribute='extra_quantity') if order.items | selectattr('extra_quantity') | list else '' }}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 푸터 메모 -->
+  {% if order.remark %}
+  <div class="footer-note">
+    <span class="note-label">특이사항:</span> {{ order.remark }}
+  </div>
+  {% endif %}
+
+</div>
+{% else %}
+<div style="padding:20mm; text-align:center; color:#999; font-size:14pt;">
+  해당 날짜에 확정된 주문이 없습니다.
+</div>
+{% endfor %}
+
+</body>
+</html>
