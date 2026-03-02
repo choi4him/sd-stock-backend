@@ -94,6 +94,13 @@ class InquiryRead(BaseModel):
     farm_check_at: Optional[datetime] = None
     farm_check_responded: bool = False
     farm_check_result: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    # 조인 데이터
+    customers: Optional[dict] = None
+    strains: Optional[dict] = None
+    professors: Optional[dict] = None
 
     model_config = {"from_attributes": True}
 
