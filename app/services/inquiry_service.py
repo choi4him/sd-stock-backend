@@ -137,7 +137,11 @@ class InquiryService:
         else:
             target_date = inquiry_date
 
-        select_query = "*, customers!inner(*), strains!inner(*), professors(*)" if customer_name else "*, customers(*), strains(*), professors(*)"
+        # customer_name 필터 있을 때만 inner join, 아니면 left join
+        if customer_name:
+            select_query = "*, customers!inner(id, company_name), strains(id, code, full_name), professors(id, name)"
+        else:
+            select_query = "*, customers(id, company_name), strains(id, code, full_name), professors(id, name)"
         query = self.db.table("inquiries").select(select_query, count="exact")
 
         if target_date:
