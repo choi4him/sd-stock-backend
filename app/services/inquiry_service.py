@@ -65,7 +65,7 @@ class InquiryService:
     # ── 채번 ─────────────────────────────────────────────────────
     def _next_inquiry_no(self, today_str: str) -> str:
         """INQ-YYYYMMDD-001, 002... 형식으로 채번"""
-        prefix = f"INQ-{today_str}-"
+        prefix = f"QUE-{today_str}-"
         conn = self._pg_conn()
         try:
             conn.autocommit = True
