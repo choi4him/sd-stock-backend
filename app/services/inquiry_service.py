@@ -131,56 +131,83 @@ class InquiryService:
         page: int = 1,
         limit: int = 20,
     ) -> dict:
-        # Default target_date if no other filters are present
-        if not any([start_date, end_date, stages, stage, customer_id, customer_name, strain_id, age_week, farm_check_requested]):
-            target_date = inquiry_date or date.today()
-        else:
-            target_date = inquiry_date
+        conn = self._pg_conn()
+        try:
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                conditions = []
+                params = []
 
-        # customer_name 필터 있을 때만 inner join, 아니면 left join
-        if customer_name:
-            select_query = "*, customers!inner(id, company_name), strains(id, code, full_name), professors(id, name)"
-        else:
-            select_query = "*, customers(id, company_name), strains(id, code, full_name), professors(id, name)"
-        query = self.db.table("inquiries").select(select_query, count="exact")
+                # 기본: 필터 없으면 오늘 날짜
+                if not any([start_date, end_date, stages, stage, customer_id, customer_name, strain_id, age_week, farm_check_requested]):
+                    target_date = inquiry_date or date.today()
+                else:
+                    target_date = inquiry_date
 
-        if target_date:
-            query = query.eq("inquiry_date", str(target_date))
-        if start_date:
-            query = query.gte("inquiry_date", str(start_date))
-        if end_date:
-            query = query.lte("inquiry_date", str(end_date))
-        
-        # Support both 'stage' and 'stages'
-        if stage:
-            query = query.eq("stage", stage)
-        if stages:
-            query = query.in_("stage", stages)
+                if target_date:
+                    conditions.append("i.inquiry_date = %s")
+                    params.append(str(target_date))
+                if start_date:
+                    conditions.append("i.inquiry_date >= %s")
+                    params.append(str(start_date))
+                if end_date:
+                    conditions.append("i.inquiry_date <= %s")
+                    params.append(str(end_date))
+                if stage:
+                    conditions.append("i.stage = %s")
+                    params.append(stage)
+                if stages:
+                    conditions.append(f"i.stage = ANY(%s)")
+                    params.append(stages)
+                if customer_id:
+                    conditions.append("i.customer_id = %s")
+                    params.append(customer_id)
+                if customer_name:
+                    conditions.append("c.company_name ILIKE %s")
+                    params.append(f"%{customer_name}%")
+                if strain_id:
+                    conditions.append("i.strain_id = %s")
+                    params.append(strain_id)
+                if age_week:
+                    conditions.append("i.age_week = %s")
+                    params.append(age_week)
+                if farm_check_requested is not None:
+                    conditions.append("i.farm_check_requested = %s")
+                    params.append(farm_check_requested)
+                if farm_check_responded is not None:
+                    conditions.append("i.farm_check_responded = %s")
+                    params.append(farm_check_responded)
 
-        if customer_id:
-            query = query.eq("customer_id", customer_id)
-        if customer_name:
-            query = query.ilike("customers.company_name", f"%{customer_name}%")
-        
-        if strain_id:
-            query = query.eq("strain_id", strain_id)
-        if age_week:
-            query = query.eq("age_week", age_week)
-            
-        if farm_check_requested is not None:
-            query = query.eq("farm_check_requested", farm_check_requested)
-        if farm_check_responded is not None:
-            query = query.eq("farm_check_responded", farm_check_responded)
-            
-        # Pagination
-        offset = (page - 1) * limit
-        query = query.order("inquiry_no", desc=True).range(offset, offset + limit - 1)
-        
-        res = query.execute()
-        return {
-            "items": res.data or [],
-            "total": res.count or 0
-        }
+                where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+                offset = (page - 1) * limit
+
+                count_sql = f"""
+                    SELECT COUNT(*) FROM inquiries i
+                    LEFT JOIN customers c ON i.customer_id = c.id
+                    LEFT JOIN strains s ON i.strain_id = s.id
+                    {where}
+                """
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["count"]
+
+                data_sql = f"""
+                    SELECT i.*,
+                        json_build_object('id', c.id, 'company_name', c.company_name) AS customers,
+                        json_build_object('id', s.id, 'code', s.code, 'full_name', s.full_name) AS strains
+                    FROM inquiries i
+                    LEFT JOIN customers c ON i.customer_id = c.id
+                    LEFT JOIN strains s ON i.strain_id = s.id
+                    {where}
+                    ORDER BY i.inquiry_no DESC
+                    LIMIT %s OFFSET %s
+                """
+                cur.execute(data_sql, params + [limit, offset])
+                rows = [dict(r) for r in cur.fetchall()]
+                # JSON 컬럼 파싱 (psycopg2가 자동 처리)
+                return {"items": rows, "total": total}
+        finally:
+            conn.close()
+
 
     # ── 생성 ─────────────────────────────────────────────────────
     def create_inquiry(self, data: dict) -> dict:
