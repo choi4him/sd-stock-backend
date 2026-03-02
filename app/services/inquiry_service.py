@@ -127,6 +127,7 @@ class InquiryService:
         strain_id: Optional[str] = None,
         age_week: Optional[int] = None,
         farm_check_requested: Optional[bool] = None,
+        farm_check_responded: Optional[bool] = None,
         page: int = 1,
         limit: int = 20,
     ) -> dict:
