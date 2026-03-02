@@ -358,13 +358,13 @@ class OrderService:
                 strain_ids = list({i["strain_id"] for i in items if i.get("strain_id")})
 
                 if customer_ids:
-                    cur.execute("SELECT id, company_name FROM customers WHERE id = ANY(%s)", [customer_ids])
+                    cur.execute("SELECT id, company_name FROM customers WHERE id = ANY(%s::uuid[])", [customer_ids])
                     customer_map = {str(r["id"]): r["company_name"] for r in cur.fetchall()}
                 else:
                     customer_map = {}
 
                 if strain_ids:
-                    cur.execute("SELECT id, code FROM strains WHERE id = ANY(%s)", [strain_ids])
+                    cur.execute("SELECT id, code FROM strains WHERE id = ANY(%s::uuid[])", [strain_ids])
                     strain_map = {str(r["id"]): r["code"] for r in cur.fetchall()}
                 else:
                     strain_map = {}
