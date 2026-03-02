@@ -64,6 +64,7 @@ class InquiryUpdate(BaseModel):
     preferred_room_id: Optional[UUID] = None
     stock_status: Optional[StockStatusEnum] = None
     stage: Optional[InquiryStageEnum] = None
+    farm_check_requested: Optional[bool] = None
     farm_check_responded: Optional[bool] = None
     farm_check_result: Optional[str] = None
 
