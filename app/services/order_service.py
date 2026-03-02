@@ -353,6 +353,29 @@ class OrderService:
                 cur.execute(data_sql, params + [limit, offset])
                 items = [dict(row) for row in cur.fetchall()]
 
+                # customer_name, strain_name 보완
+                customer_ids = list({i["customer_id"] for i in items if i.get("customer_id")})
+                strain_ids = list({i["strain_id"] for i in items if i.get("strain_id")})
+
+                if customer_ids:
+                    cur.execute("SELECT id, company_name FROM customers WHERE id = ANY(%s)", [customer_ids])
+                    customer_map = {str(r["id"]): r["company_name"] for r in cur.fetchall()}
+                else:
+                    customer_map = {}
+
+                if strain_ids:
+                    cur.execute("SELECT id, code FROM strains WHERE id = ANY(%s)", [strain_ids])
+                    strain_map = {str(r["id"]): r["code"] for r in cur.fetchall()}
+                else:
+                    strain_map = {}
+
+                for item in items:
+                    item["customer_name"] = customer_map.get(str(item.get("customer_id")), "—")
+                    item["strain_name"] = strain_map.get(str(item.get("strain_id")), "—")
+
                 return {"items": items, "total": total}
+        except Exception as e:
+            logger.error(f"[list_orders] psycopg2 오류: {e}")
+            raise
         finally:
             conn.close()
