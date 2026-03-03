@@ -33,3 +33,15 @@ class StrainService:
     def create_strain(self, data: dict) -> dict:
         res = self.db.table("strains").insert(data).execute()
         return res.data[0]
+
+    def delete_strain(self, strain_id: str) -> None:
+        self.db.table("strains").delete().eq("id", strain_id).execute()
+
+    def toggle_strain(self, strain_id: str, is_active: bool) -> dict:
+        res = (
+            self.db.table("strains")
+            .update({"is_active": is_active})
+            .eq("id", strain_id)
+            .execute()
+        )
+        return res.data[0]
