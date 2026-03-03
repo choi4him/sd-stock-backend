@@ -47,32 +47,23 @@ class InventoryService:
         kst = timezone(timedelta(hours=9))
         target_date = record_date or datetime.now(kst).strftime("%Y-%m-%d")
 
-        conditions = ["di.record_date <= %s"]
+        conditions = ["record_date <= %s"]
         params: list = [target_date]
 
         if room_id:
-            conditions.append("di.room_id = %s")
+            conditions.append("room_id = %s")
             params.append(room_id)
         if strain_id:
-            conditions.append("di.strain_id = %s")
+            conditions.append("strain_id = %s")
             params.append(strain_id)
 
         where = "WHERE " + " AND ".join(conditions)
 
         sql = f"""
-            SELECT DISTINCT ON (
-                di.room_id, di.strain_id, di.age_week, di.age_half, di.sex
-            )
-                di.*,
-                row_to_json(r) AS rooms,
-                row_to_json(s) AS strains
-            FROM daily_inventory di
-            LEFT JOIN rooms  r ON di.room_id   = r.id
-            LEFT JOIN strains s ON di.strain_id = s.id
+            SELECT DISTINCT ON (room_id, strain_id, age_week, age_half, sex) *
+            FROM daily_inventory
             {where}
-            ORDER BY
-                di.room_id, di.strain_id, di.age_week, di.age_half, di.sex,
-                di.record_date DESC
+            ORDER BY room_id, strain_id, age_week, age_half, sex, record_date DESC
         """
 
         conn = self._pg_conn()
@@ -81,7 +72,6 @@ class InventoryService:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(sql, params)
                 rows = [dict(r) for r in cur.fetchall()]
-            # age_week / age_half / sex 순서로 정렬 (프론트 테이블 순서 일치)
             rows.sort(key=lambda r: (r.get("age_week", 0), r.get("age_half") or "", r.get("sex", "")))
             return rows
         finally:
