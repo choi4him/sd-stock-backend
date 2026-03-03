@@ -108,6 +108,21 @@ def update_inquiry(
     return result
 
 
+# ── 삭제 ─────────────────────────────────────────────────────────
+@router.delete(
+    "/{inquiry_id}",
+    status_code=204,
+    summary="주문문의 삭제",
+)
+def delete_inquiry(
+    inquiry_id: UUID,
+    svc: InquiryService = Depends(get_service),
+):
+    ok = svc.delete_inquiry(str(inquiry_id))
+    if not ok:
+        raise HTTPException(status_code=404, detail="주문문의를 찾을 수 없습니다.")
+
+
 # ── 재고 확인 ─────────────────────────────────────────────────────
 @router.post(
     "/{inquiry_id}/check-stock",

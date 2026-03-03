@@ -266,6 +266,20 @@ class InquiryService:
                 )
         return updated
 
+    def delete_inquiry(self, inquiry_id: str) -> bool:
+        try:
+            conn = self._pg_conn()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM inquiries WHERE id = %s RETURNING id", (inquiry_id,))
+            row = cur.fetchone()
+            conn.commit()
+            cur.close()
+            conn.close()
+            return row is not None
+        except Exception as e:
+            logger.error(f"delete_inquiry error: {e}")
+            return False
+
     # ── 재고 확인 ─────────────────────────────────────────────────
     def check_stock(self, inquiry_id: str) -> Optional[dict]:
         inquiry = self.get_inquiry(inquiry_id)
