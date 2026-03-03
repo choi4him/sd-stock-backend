@@ -118,6 +118,20 @@ def upsert_inventory(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("/batch", summary="특정 날짜/구역/품종 재고 전체 삭제")
+def delete_inventory_batch(
+    record_date: str = Query(..., description="삭제할 날짜 (YYYY-MM-DD)"),
+    room_id: str = Query(..., description="삭제할 구역 UUID"),
+    strain_id: str = Query(..., description="삭제할 품종 UUID"),
+    svc: InventoryService = Depends(get_service),
+):
+    """
+    해당 날짜, 구역, 품종에 기록된 모든 재고 레코드를 삭제합니다.
+    """
+    count = svc.pg_delete_inventory(record_date, room_id, strain_id)
+    return {"deleted_count": count}
+
+
 # ── PDF ────────────────────────────────────────────────────────────
 
 
