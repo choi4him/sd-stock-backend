@@ -34,20 +34,58 @@ class InventoryService:
         room_id: Optional[str] = None,
         strain_id: Optional[str] = None,
     ) -> list[dict]:
+        """
+        이월(carry-forward) 조회:
+        각 (room_id, strain_id, age_week, age_half, sex) 조합별로
+        record_date 이하 가장 최근 날짜의 데이터를 반환한다.
+
+        DISTINCT ON + ORDER BY record_date DESC 사용.
+        rest_count는 GENERATED ALWAYS 컬럼이므로 SELECT *에 자동 포함됨.
+        """
         from datetime import datetime, timezone, timedelta
 
-        # record_date가 지정되면 해당 날짜, 없으면 오늘(KST) 날짜로 조회
         kst = timezone(timedelta(hours=9))
         target_date = record_date or datetime.now(kst).strftime("%Y-%m-%d")
 
-        query = self.db.table("daily_inventory").select(SELECT_WITH_JOINS)
-        query = query.eq("record_date", target_date)
+        conditions = ["di.record_date <= %s"]
+        params: list = [target_date]
+
         if room_id:
-            query = query.eq("room_id", room_id)
+            conditions.append("di.room_id = %s")
+            params.append(room_id)
         if strain_id:
-            query = query.eq("strain_id", strain_id)
-        query = query.order("age_week").order("age_half").order("sex")
-        return query.execute().data or []
+            conditions.append("di.strain_id = %s")
+            params.append(strain_id)
+
+        where = "WHERE " + " AND ".join(conditions)
+
+        sql = f"""
+            SELECT DISTINCT ON (
+                di.room_id, di.strain_id, di.age_week, di.age_half, di.sex
+            )
+                di.*,
+                row_to_json(r) AS rooms,
+                row_to_json(s) AS strains
+            FROM daily_inventory di
+            LEFT JOIN rooms  r ON di.room_id   = r.id
+            LEFT JOIN strains s ON di.strain_id = s.id
+            {where}
+            ORDER BY
+                di.room_id, di.strain_id, di.age_week, di.age_half, di.sex,
+                di.record_date DESC
+        """
+
+        conn = self._pg_conn()
+        try:
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, params)
+                rows = [dict(r) for r in cur.fetchall()]
+            # age_week / age_half / sex 순서로 정렬 (프론트 테이블 순서 일치)
+            rows.sort(key=lambda r: (r.get("age_week", 0), r.get("age_half") or "", r.get("sex", "")))
+            return rows
+        finally:
+            conn.close()
 
     def get_on_date(
         self,
@@ -117,17 +155,43 @@ class InventoryService:
         finally:
             conn.close()
 
-    def pg_insert_batch(self, records: list[dict]) -> list[dict]:
-        """psycopg2로 직접 INSERT — Cloudflare 우회"""
+    def pg_upsert_batch(self, records: list[dict]) -> list[dict]:
+        """
+        UPSERT (ON CONFLICT DO UPDATE) — DELETE 없이 재고 수치만 업데이트.
+        order_allocations가 daily_inventory.id를 FK 참조하므로
+        기존 행 삭제 없이 UPDATE만 수행해야 FK 위반을 피할 수 있음.
+
+        UNIQUE KEY: (record_date, room_id, strain_id, age_week, age_half, sex)
+        """
         if not records:
             return []
+
+        # 업데이트 대상 컬럼 (UNIQUE KEY 제외, id/자동생성 제외)
+        UPDATE_COLS = [
+            "total_count", "adjust_cut_count", "reserved_count",
+            "dob_start", "dob_end", "cage_count", "cage_size_breakdown",
+            "animal_type", "remark", "responsible_person",
+        ]
+
         cols = list(records[0].keys())
         col_names = ", ".join(cols)
         placeholders = ", ".join(["%s"] * len(cols))
+
+        # ON CONFLICT: UNIQUE KEY 컬럼
+        conflict_target = "(record_date, room_id, strain_id, age_week, age_half, sex)"
+
+        # DO UPDATE SET: records에 실제로 포함된 컬럼만
+        update_cols = [c for c in UPDATE_COLS if c in cols]
+        do_update = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+
         sql = (
             f"INSERT INTO daily_inventory ({col_names}) "
-            f"VALUES ({placeholders}) RETURNING *"
+            f"VALUES ({placeholders}) "
+            f"ON CONFLICT {conflict_target} "
+            f"DO UPDATE SET {do_update} "
+            f"RETURNING *"
         )
+
         conn = self._pg_conn()
         try:
             conn.autocommit = False
