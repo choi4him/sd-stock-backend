@@ -34,27 +34,14 @@ class InventoryService:
         room_id: Optional[str] = None,
         strain_id: Optional[str] = None,
     ) -> list[dict]:
-        # record_date 이하에서 가장 최근 날짜 찾기
-        actual_date = record_date
-        if record_date:
-            date_q = self.db.table("daily_inventory").select("record_date")
-            if room_id:
-                date_q = date_q.eq("room_id", room_id)
-            if strain_id:
-                date_q = date_q.eq("strain_id", strain_id)
-            date_res = (
-                date_q.lte("record_date", record_date)
-                .order("record_date", desc=True)
-                .limit(1)
-                .execute()
-            )
-            if not date_res.data:
-                return []
-            actual_date = date_res.data[0]["record_date"]
+        from datetime import datetime, timezone, timedelta
+
+        # record_date가 지정되면 해당 날짜, 없으면 오늘(KST) 날짜로 조회
+        kst = timezone(timedelta(hours=9))
+        target_date = record_date or datetime.now(kst).strftime("%Y-%m-%d")
 
         query = self.db.table("daily_inventory").select(SELECT_WITH_JOINS)
-        if actual_date:
-            query = query.eq("record_date", actual_date)
+        query = query.eq("record_date", target_date)
         if room_id:
             query = query.eq("room_id", room_id)
         if strain_id:
