@@ -52,7 +52,8 @@ class ClaudeService:
 
         try:
             from anthropic import Anthropic  # lazy import (선택적 의존성)
-            client = Anthropic()  # env에서 키 자동 로드
+            from httpx import Timeout
+            client = Anthropic(timeout=Timeout(3.0, connect=3.0))
 
             user_content = (
                 f"요청: {strain} {age_week}주 {sex} {quantity}마리 납품일 {delivery_date}\n"

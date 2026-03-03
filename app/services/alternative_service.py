@@ -9,10 +9,13 @@ Priority 4: 납품일 ±7일              — 동일 strain + age + sex, 날짜 
 Priority 5: Claude AI                — 1~4 모두 부족 시만 호출
 """
 import logging
+import os
 from datetime import date, timedelta
 from typing import Optional
 from uuid import UUID
 
+import psycopg2
+import psycopg2.extras
 from supabase import Client
 
 from app.models.alternatives import AlternativeItem, AlternativeSearchResult
@@ -32,48 +35,44 @@ class AlternativeService:
     # 공용 헬퍼
     # ────────────────────────────────────────────────────────────
 
-    def _query_inventory(
+    def _bulk_query_inventory(
         self,
         strain_id: str,
         sex: str,
-        record_date: str,
-        age_week: Optional[int] = None,
-    ) -> list[dict]:
-        """daily_inventory 조회 (공통 필터)"""
-        q = (
-            self.db.table("daily_inventory")
-            .select("*, strains(code)")
-            .eq("strain_id", strain_id)
-            .eq("record_date", record_date)
-            .eq("sex", sex)
-            .gt("rest_count", 0)
-        )
-        if age_week is not None:
-            q = q.eq("age_week", age_week)
-        return q.execute().data or []
-
-    def _query_inventory_date_range(
-        self,
-        strain_id: str,
+        delivery_date: str,
         age_week: int,
-        sex: str,
-        date_from: str,
-        date_to: str,
     ) -> list[dict]:
-        """납품일 범위 재고 조회 (Priority 4용)"""
-        return (
-            self.db.table("daily_inventory")
-            .select("*, strains(code)")
-            .eq("strain_id", strain_id)
-            .eq("age_week", age_week)
-            .eq("sex", sex)
-            .gte("record_date", date_from)
-            .lte("record_date", date_to)
-            .gt("rest_count", 0)
-            .order("rest_count", desc=True)
-            .execute()
-            .data or []
-        )
+        """P1~P4에 필요한 재고를 psycopg2 단일 쿼리로 한번에 조회"""
+        d = date.fromisoformat(str(delivery_date))
+        date_from = str(d - timedelta(days=7))
+        date_to = str(d + timedelta(days=7))
+        opposite_sex = "F" if sex == "M" else "M"
+        conn = psycopg2.connect(os.environ.get("DATABASE_URL", ""))
+        try:
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT di.*, s.code as strain_code
+                    FROM daily_inventory di
+                    LEFT JOIN strains s ON di.strain_id = s.id
+                    WHERE di.strain_id = %s
+                      AND di.rest_count > 0
+                      AND (
+                        (di.sex = %s AND di.record_date = %s AND di.age_week = %s)
+                        OR (di.sex = %s AND di.record_date = %s AND di.age_week IN (%s, %s))
+                        OR (di.sex = %s AND di.record_date = %s AND di.age_week < %s)
+                        OR (di.sex = %s AND di.age_week = %s AND di.record_date BETWEEN %s AND %s)
+                      )
+                """, [
+                    strain_id,
+                    opposite_sex, str(delivery_date), age_week,
+                    sex, str(delivery_date), age_week - 1, age_week + 1,
+                    sex, str(date.today()), age_week,
+                    sex, age_week, date_from, date_to,
+                ])
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
 
     def _to_item(
         self,
@@ -84,7 +83,7 @@ class AlternativeService:
         confidence: float,
         suggested_date: Optional[date] = None,
     ) -> AlternativeItem:
-        strain_code = (row.get("strains") or {}).get("code", "?")
+        strain_code = row.get("strain_code") or (row.get("strains") or {}).get("code", "?")
         return AlternativeItem(
             priority=priority,
             type=alt_type,
@@ -104,14 +103,17 @@ class AlternativeService:
     # ────────────────────────────────────────────────────────────
     def _priority1_opposite_sex(
         self,
-        strain_id: str,
+        bulk: list[dict],
         age_week: int,
         sex: str,
         quantity: int,
         delivery_date: str,
     ) -> list[AlternativeItem]:
         opposite = SEX_FLIP[sex]
-        rows = self._query_inventory(strain_id, opposite, delivery_date, age_week)
+        rows = [r for r in bulk
+                if r["sex"] == opposite
+                and str(r["record_date"]) == delivery_date
+                and r["age_week"] == age_week]
         results = []
         for row in rows:
             avail = row.get("rest_count") or 0
@@ -131,7 +133,7 @@ class AlternativeService:
     # ────────────────────────────────────────────────────────────
     def _priority2_adjacent_age(
         self,
-        strain_id: str,
+        bulk: list[dict],
         age_week: int,
         sex: str,
         quantity: int,
@@ -142,7 +144,10 @@ class AlternativeService:
             adj = age_week + delta
             if not (3 <= adj <= 10):
                 continue
-            rows = self._query_inventory(strain_id, sex, delivery_date, adj)
+            rows = [r for r in bulk
+                    if r["sex"] == sex
+                    and str(r["record_date"]) == delivery_date
+                    and r["age_week"] == adj]
             for row in rows:
                 avail = row.get("rest_count") or 0
                 if avail > 0:
@@ -161,38 +166,30 @@ class AlternativeService:
     # ────────────────────────────────────────────────────────────
     def _priority3_reverse_calc_age(
         self,
-        strain_id: str,
+        bulk: list[dict],
         age_week: int,
         sex: str,
         quantity: int,
         delivery_date_str: str,
     ) -> list[AlternativeItem]:
         """
-        현재(오늘) daily_inventory에서 age_week < target인 행을 조회.
+        오늘자 재고에서 age_week < target인 행을 필터링.
         조건: record_date + (target - current_age) * 7일 <= delivery_date
-        즉, 오늘~납품일 사이에 목표 주령에 도달.
         """
         delivery_date = date.fromisoformat(delivery_date_str)
         today = str(date.today())
 
-        # 오늘자 재고에서 더 어린 동물 탐색
-        q = (
-            self.db.table("daily_inventory")
-            .select("*, strains(code)")
-            .eq("strain_id", strain_id)
-            .eq("sex", sex)
-            .eq("record_date", today)
-            .lt("age_week", age_week)   # 더 어린 동물
-            .gt("rest_count", 0)
-            .execute()
-        )
+        rows = [r for r in bulk
+                if r["sex"] == sex
+                and str(r["record_date"]) == today
+                and r["age_week"] < age_week]
 
         results = []
-        for row in (q.data or []):
+        for row in rows:
             current_age = row["age_week"]
             weeks_to_grow = age_week - current_age
             grow_days = weeks_to_grow * 7
-            record_date = date.fromisoformat(row["record_date"])
+            record_date = date.fromisoformat(str(row["record_date"]))
             arrival_date = record_date + timedelta(days=grow_days)
 
             avail = row.get("rest_count") or 0
@@ -216,25 +213,22 @@ class AlternativeService:
     # ────────────────────────────────────────────────────────────
     def _priority4_date_adjust(
         self,
-        strain_id: str,
+        bulk: list[dict],
         age_week: int,
         sex: str,
         quantity: int,
         delivery_date_str: str,
     ) -> list[AlternativeItem]:
         delivery_date = date.fromisoformat(delivery_date_str)
-        date_from = str(delivery_date - timedelta(days=7))
-        date_to   = str(delivery_date + timedelta(days=7))
 
-        rows = self._query_inventory_date_range(
-            strain_id, age_week, sex, date_from, date_to
-        )
+        rows = [r for r in bulk
+                if r["sex"] == sex
+                and r["age_week"] == age_week
+                and str(r["record_date"]) != delivery_date_str]
 
         results = []
         for row in rows:
-            rec_date = date.fromisoformat(row["record_date"])
-            if rec_date == delivery_date:
-                continue  # 원래 날짜 제외
+            rec_date = date.fromisoformat(str(row["record_date"]))
             avail = row.get("rest_count") or 0
             if avail > 0:
                 diff = (rec_date - delivery_date).days
@@ -330,28 +324,23 @@ class AlternativeService:
         all_alternatives: list[AlternativeItem] = []
         ai_triggered = False
 
+        # ── 단일 쿼리로 P1~P4 재고 한번에 조회 ──────────────────
+        bulk = self._bulk_query_inventory(strain_id, sex, delivery_date, age_week)
+
         # ── Priority 1 ─────────────────────────────────────────
-        p1 = self._priority1_opposite_sex(
-            strain_id, age_week, sex, quantity, delivery_date
-        )
+        p1 = self._priority1_opposite_sex(bulk, age_week, sex, quantity, delivery_date)
         all_alternatives.extend(p1)
 
         # ── Priority 2 ─────────────────────────────────────────
-        p2 = self._priority2_adjacent_age(
-            strain_id, age_week, sex, quantity, delivery_date
-        )
+        p2 = self._priority2_adjacent_age(bulk, age_week, sex, quantity, delivery_date)
         all_alternatives.extend(p2)
 
         # ── Priority 3 ─────────────────────────────────────────
-        p3 = self._priority3_reverse_calc_age(
-            strain_id, age_week, sex, quantity, delivery_date
-        )
+        p3 = self._priority3_reverse_calc_age(bulk, age_week, sex, quantity, delivery_date)
         all_alternatives.extend(p3)
 
         # ── Priority 4 ─────────────────────────────────────────
-        p4 = self._priority4_date_adjust(
-            strain_id, age_week, sex, quantity, delivery_date
-        )
+        p4 = self._priority4_date_adjust(bulk, age_week, sex, quantity, delivery_date)
         all_alternatives.extend(p4)
 
         # ── Priority 5 (1~4 모두 결과 없을 때) ─────────────────
