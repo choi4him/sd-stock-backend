@@ -6,6 +6,8 @@ import os
 import logging
 from typing import Optional
 
+import json
+
 import psycopg2
 import psycopg2.extras
 from supabase import Client
@@ -130,13 +132,20 @@ class InventoryService:
         )
         conn = self._pg_conn()
         try:
-            conn.autocommit = True
+            conn.autocommit = False
             results = []
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 for rec in records:
-                    vals = [rec[c] for c in cols]
+                    vals = [
+                        json.dumps(rec[c]) if isinstance(rec[c], (dict, list)) else rec[c]
+                        for c in cols
+                    ]
                     cur.execute(sql, vals)
                     results.append(dict(cur.fetchone()))
+            conn.commit()
             return results
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()

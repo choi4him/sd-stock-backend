@@ -88,7 +88,7 @@ def upsert_inventory(
             clean_r.pop("rooms", None)
             clean_r.pop("room_code", None)
             age = clean_r.get("age_week", 0)
-            if age < 3 or age > 10:
+            if age < 0 or age > 10:
                 continue
             clean_records.append(clean_r)
 
@@ -100,12 +100,13 @@ def upsert_inventory(
         room_id = r0.get("room_id")
         strain_id = r0.get("strain_id")
 
-        # record_date 형식 검증
+        # record_date 형식 검증 (빈 값이면 오늘 한국 날짜로 폴백)
         if not record_date or not date_re.match(str(record_date)):
-            raise HTTPException(
-                status_code=422,
-                detail=f"record_date 형식이 올바르지 않습니다: '{record_date}' (YYYY-MM-DD 필요)",
-            )
+            from datetime import datetime, timezone, timedelta
+            kst = timezone(timedelta(hours=9))
+            record_date = datetime.now(kst).strftime("%Y-%m-%d")
+            for rec in clean_records:
+                rec["record_date"] = record_date
 
         # psycopg2로 삭제 + 삽입 (Cloudflare 우회)
         if record_date and room_id and strain_id:
