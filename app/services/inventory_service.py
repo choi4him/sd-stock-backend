@@ -119,6 +119,17 @@ class InventoryService:
         finally:
             conn.close()
 
+    def pg_delete_all_inventory(self) -> int:
+        """daily_inventory 전체 삭제"""
+        conn = self._pg_conn()
+        try:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM daily_inventory")
+                return cur.rowcount
+        finally:
+            conn.close()
+
     def pg_insert_batch(self, records: list[dict]) -> list[dict]:
         """psycopg2로 직접 INSERT — Cloudflare 우회"""
         if not records:

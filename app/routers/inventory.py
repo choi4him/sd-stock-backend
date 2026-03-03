@@ -133,6 +133,16 @@ def delete_inventory_batch(
     return {"deleted_count": count}
 
 
+@router.delete("/all", summary="daily_inventory 전체 삭제")
+def delete_all_inventory(svc: InventoryService = Depends(get_service)):
+    """
+    daily_inventory 테이블의 모든 레코드를 삭제합니다.
+    주의: 되돌릴 수 없습니다.
+    """
+    count = svc.pg_delete_all_inventory()
+    return {"deleted_count": count}
+
+
 # ── PDF ────────────────────────────────────────────────────────────
 
 

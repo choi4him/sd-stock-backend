@@ -185,6 +185,7 @@ class InquiryService:
                     SELECT COUNT(*) FROM inquiries i
                     LEFT JOIN customers c ON i.customer_id = c.id
                     LEFT JOIN strains s ON i.strain_id = s.id
+                    LEFT JOIN professors p ON i.professor_id = p.id
                     {where}
                 """
                 cur.execute(count_sql, params)
@@ -193,10 +194,12 @@ class InquiryService:
                 data_sql = f"""
                     SELECT i.*,
                         json_build_object('id', c.id, 'company_name', c.company_name) AS customers,
-                        json_build_object('id', s.id, 'code', s.code, 'full_name', s.full_name) AS strains
+                        json_build_object('id', s.id, 'code', s.code, 'full_name', s.full_name) AS strains,
+                        json_build_object('id', p.id, 'name', p.name) AS professors
                     FROM inquiries i
                     LEFT JOIN customers c ON i.customer_id = c.id
                     LEFT JOIN strains s ON i.strain_id = s.id
+                    LEFT JOIN professors p ON i.professor_id = p.id
                     {where}
                     ORDER BY i.inquiry_no DESC
                     LIMIT %s OFFSET %s
