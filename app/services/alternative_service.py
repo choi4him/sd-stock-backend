@@ -42,32 +42,55 @@ class AlternativeService:
         delivery_date: str,
         age_week: int,
     ) -> list[dict]:
-        """P1~P4에 필요한 재고를 psycopg2 단일 쿼리로 한번에 조회"""
+        """
+        P1~P4에 필요한 재고를 단일 SQL로 조회 (carry-forward 방식).
+
+        각 (sex, age_week) 조합별로 delivery_date 이하 가장 최근 날짜 데이터를 가져옴.
+        record_date 정확 일치 대신 DISTINCT ON + record_date <= delivery_date 사용.
+        """
         d = date.fromisoformat(str(delivery_date))
         date_from = str(d - timedelta(days=7))
-        date_to = str(d + timedelta(days=7))
+        date_to   = str(d + timedelta(days=7))
         opposite_sex = "F" if sex == "M" else "M"
+        today = str(date.today())
+
         conn = psycopg2.connect(os.environ.get("DATABASE_URL", ""))
         try:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT di.*, s.code as strain_code
+                    -- carry-forward: (sex, age_week) 조합별 delivery_date 이하 최신 행
+                    SELECT DISTINCT ON (di.sex, di.age_week, di.age_half)
+                        di.*, s.code as strain_code
                     FROM daily_inventory di
                     LEFT JOIN strains s ON di.strain_id = s.id
                     WHERE di.strain_id = %s
                       AND di.rest_count > 0
+                      AND di.record_date <= %s
                       AND (
-                        (di.sex = %s AND di.record_date = %s AND di.age_week = %s)
-                        OR (di.sex = %s AND di.record_date = %s AND di.age_week IN (%s, %s))
-                        OR (di.sex = %s AND di.record_date = %s AND di.age_week < %s)
-                        OR (di.sex = %s AND di.age_week = %s AND di.record_date BETWEEN %s AND %s)
+                        -- P1: 반대 성별, 동일 age
+                        (di.sex = %s AND di.age_week = %s)
+                        OR
+                        -- P2: 동일 성별, 인접 age ±1
+                        (di.sex = %s AND di.age_week IN (%s, %s))
+                        OR
+                        -- P3: 동일 성별, 더 어린 동물 (오늘~납품일 사이 목표 주령 도달)
+                        (di.sex = %s AND di.age_week < %s)
+                        OR
+                        -- P4: 동일 sex+age, 납품일 ±7일 범위 내 최근 재고
+                        (di.sex = %s AND di.age_week = %s AND di.record_date BETWEEN %s AND %s)
                       )
+                    ORDER BY di.sex, di.age_week, di.age_half, di.record_date DESC
                 """, [
                     strain_id,
-                    opposite_sex, str(delivery_date), age_week,
-                    sex, str(delivery_date), age_week - 1, age_week + 1,
-                    sex, str(date.today()), age_week,
+                    str(delivery_date),
+                    # P1
+                    opposite_sex, age_week,
+                    # P2
+                    sex, age_week - 1, age_week + 1,
+                    # P3
+                    sex, age_week,
+                    # P4
                     sex, age_week, date_from, date_to,
                 ])
                 return [dict(r) for r in cur.fetchall()]
@@ -110,9 +133,9 @@ class AlternativeService:
         delivery_date: str,
     ) -> list[AlternativeItem]:
         opposite = SEX_FLIP[sex]
+        # DISTINCT ON으로 이미 최신 행만 있음 — record_date 필터 불필요
         rows = [r for r in bulk
                 if r["sex"] == opposite
-                and str(r["record_date"]) == delivery_date
                 and r["age_week"] == age_week]
         results = []
         for row in rows:
@@ -142,11 +165,11 @@ class AlternativeService:
         results = []
         for delta, label in [(-1, "1주 어린"), (+1, "1주 많은")]:
             adj = age_week + delta
-            if not (3 <= adj <= 10):
+            if not (0 <= adj <= 10):
                 continue
+            # DISTINCT ON으로 이미 최신 행만 있음 — record_date 필터 불필요
             rows = [r for r in bulk
                     if r["sex"] == sex
-                    and str(r["record_date"]) == delivery_date
                     and r["age_week"] == adj]
             for row in rows:
                 avail = row.get("rest_count") or 0
@@ -173,15 +196,14 @@ class AlternativeService:
         delivery_date_str: str,
     ) -> list[AlternativeItem]:
         """
-        오늘자 재고에서 age_week < target인 행을 필터링.
-        조건: record_date + (target - current_age) * 7일 <= delivery_date
+        bulk에서 더 어린 동물을 필터 — record_date에서 목표 주령까지 자라는 날수 계산.
+        DISTINCT ON으로 이미 가장 최근 record_date 행만 있음.
         """
         delivery_date = date.fromisoformat(delivery_date_str)
-        today = str(date.today())
 
+        # 동일 성별, 더 어린 동물
         rows = [r for r in bulk
                 if r["sex"] == sex
-                and str(r["record_date"]) == today
                 and r["age_week"] < age_week]
 
         results = []
