@@ -117,7 +117,7 @@ class AlternativeService:
             age_half=row.get("age_half"),
             sex=row["sex"],
             available_count=row.get("rest_count", 0) or 0,
-            suggested_delivery_date=suggested_date or date.fromisoformat(row["record_date"]),
+            suggested_delivery_date=suggested_date or (row["record_date"] if isinstance(row["record_date"], date) else date.fromisoformat(row["record_date"])),
             confidence=confidence,
         )
 
