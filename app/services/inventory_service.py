@@ -149,7 +149,7 @@ class InventoryService:
 
     def pg_upsert_batch(self, records: list[dict]) -> list[dict]:
         """
-        UPSERT (ON CONFLICT DO UPDATE) — DELETE 없이 재고 수치만 업데이트.
+        UPSERT (ON CONFLICT DO UPDATE) — execute_values로 bulk INSERT.
         order_allocations가 daily_inventory.id를 FK 참조하므로
         기존 행 삭제 없이 UPDATE만 수행해야 FK 위반을 피할 수 있음.
 
@@ -158,7 +158,6 @@ class InventoryService:
         if not records:
             return []
 
-        # 업데이트 대상 컬럼 (UNIQUE KEY 제외, id/자동생성 제외)
         UPDATE_COLS = [
             "total_count", "adjust_cut_count", "reserved_count",
             "dob_start", "dob_end", "cage_count", "cage_size_breakdown",
@@ -167,35 +166,34 @@ class InventoryService:
 
         cols = list(records[0].keys())
         col_names = ", ".join(cols)
-        placeholders = ", ".join(["%s"] * len(cols))
-
-        # ON CONFLICT: UNIQUE KEY 컬럼
         conflict_target = "(record_date, room_id, strain_id, age_week, age_half, sex)"
-
-        # DO UPDATE SET: records에 실제로 포함된 컬럼만
         update_cols = [c for c in UPDATE_COLS if c in cols]
         do_update = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
 
         sql = (
-            f"INSERT INTO daily_inventory ({col_names}) "
-            f"VALUES ({placeholders}) "
+            f"INSERT INTO daily_inventory ({col_names}) VALUES %s "
             f"ON CONFLICT {conflict_target} "
             f"DO UPDATE SET {do_update} "
             f"RETURNING *"
         )
 
+        # 각 레코드를 튜플로 변환
+        values = []
+        for rec in records:
+            row = tuple(
+                json.dumps(rec[c]) if isinstance(rec[c], (dict, list)) else rec[c]
+                for c in cols
+            )
+            values.append(row)
+
         conn = self._pg_conn()
         try:
             conn.autocommit = False
-            results = []
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                for rec in records:
-                    vals = [
-                        json.dumps(rec[c]) if isinstance(rec[c], (dict, list)) else rec[c]
-                        for c in cols
-                    ]
-                    cur.execute(sql, vals)
-                    results.append(dict(cur.fetchone()))
+                psycopg2.extras.execute_values(
+                    cur, sql, values, page_size=len(values),
+                )
+                results = [dict(r) for r in cur.fetchall()]
             conn.commit()
             return results
         except Exception:
