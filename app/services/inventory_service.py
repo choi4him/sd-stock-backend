@@ -49,7 +49,7 @@ class InventoryService:
         today_kst = datetime.now(kst).date()
         target_date = record_date or str(today_kst)
 
-        conditions = ["record_date <= %s"]
+        conditions = ["record_date <= %s", "total_count > 0"]
         params: list = [target_date]
 
         if room_id:
