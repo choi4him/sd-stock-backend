@@ -42,10 +42,12 @@ class InventoryService:
         DISTINCT ON + ORDER BY record_date DESC 사용.
         rest_count는 GENERATED ALWAYS 컬럼이므로 SELECT *에 자동 포함됨.
         """
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime
+        import pytz
 
-        kst = timezone(timedelta(hours=9))
-        target_date = record_date or datetime.now(kst).strftime("%Y-%m-%d")
+        kst = pytz.timezone('Asia/Seoul')
+        today_kst = datetime.now(kst).date()
+        target_date = record_date or str(today_kst)
 
         conditions = ["record_date <= %s"]
         params: list = [target_date]
