@@ -5,11 +5,18 @@ psycopg2로 쓰기 작업 수행 (Cloudflare WAF 우회)
 """
 import os
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
+import pytz
 import psycopg2
 import psycopg2.extras
+
+_KST = pytz.timezone('Asia/Seoul')
+
+
+def _today_kst() -> date:
+    return datetime.now(_KST).date()
 from fastapi import HTTPException
 from supabase import Client
 
@@ -111,7 +118,7 @@ class OrderService:
 
     # ── 주문 확정 생성 ────────────────────────────────────────────
     def create_order(self, data: dict) -> dict:
-        today_str = date.today().strftime("%Y%m%d")
+        today_str = _today_kst().strftime("%Y%m%d")
 
         # UUID → str 직렬화
         for key in ("reservation_id", "customer_id", "strain_id"):
@@ -257,7 +264,7 @@ class OrderService:
 
     # ── 내일 출고 목록 ────────────────────────────────────────────
     def get_dispatch_list(self) -> list:
-        tomorrow = str(date.today() + timedelta(days=1))
+        tomorrow = str(_today_kst() + timedelta(days=1))
         res = (
             self.db.table("order_confirmations")
             .select("*, customers(*), strains(*)")

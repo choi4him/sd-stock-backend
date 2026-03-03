@@ -7,6 +7,10 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+import pytz
+
+_KST = pytz.timezone('Asia/Seoul')
+
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from reportlab.lib.pagesizes import A4, landscape
@@ -187,7 +191,7 @@ class PdfService:
 
                 # 발행일
                 story.append(Spacer(1, 6*mm))
-                story.append(_p(f"발행일: {datetime.now().strftime('%Y-%m-%d')}  |  {COMPANY_INFO['name']}", align=TA_RIGHT, size=7))
+                story.append(_p(f"발행일: {datetime.now(_KST).strftime('%Y-%m-%d')}  |  {COMPANY_INFO['name']}", align=TA_RIGHT, size=7))
 
         doc.build(story)
         return buf.getvalue()
@@ -242,7 +246,7 @@ class PdfService:
 
         story.append(_p("배 송 지 시 서", size=18, bold=True))
         story.append(Spacer(1, 2*mm))
-        story.append(_p(f"납품일: {target_date}  |  발행: {datetime.now().strftime('%Y-%m-%d')}  |  {COMPANY_INFO['name']}", align=TA_RIGHT, size=8))
+        story.append(_p(f"납품일: {target_date}  |  발행: {datetime.now(_KST).strftime('%Y-%m-%d')}  |  {COMPANY_INFO['name']}", align=TA_RIGHT, size=8))
         story.append(Spacer(1, 4*mm))
 
         headers = ["순번", "거래처", "주소", "Strain", "주령", "성별", "수량", "비고"]

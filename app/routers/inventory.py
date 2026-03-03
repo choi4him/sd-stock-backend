@@ -99,9 +99,10 @@ def upsert_inventory(
         r0 = clean_records[0]
         record_date = r0.get("record_date", "")
         if not record_date or not date_re.match(str(record_date)):
-            from datetime import datetime, timezone, timedelta
-            kst = timezone(timedelta(hours=9))
-            record_date = datetime.now(kst).strftime("%Y-%m-%d")
+            from datetime import datetime
+            import pytz
+            _kst = pytz.timezone('Asia/Seoul')
+            record_date = datetime.now(_kst).strftime("%Y-%m-%d")
             for rec in clean_records:
                 rec["record_date"] = record_date
 
@@ -174,8 +175,10 @@ def get_stock_management_pdf(
     ),
     svc: PdfService = Depends(get_pdf_service),
 ):
-    import datetime as dt
-    target = date or str(dt.date.today())
+    from datetime import datetime as _dt
+    import pytz
+    _kst = pytz.timezone('Asia/Seoul')
+    target = date or str(_dt.now(_kst).date())
     try:
         pdf_bytes = svc.render_stock_management(
             record_date=target,

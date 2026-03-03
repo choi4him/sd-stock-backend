@@ -2,9 +2,16 @@
 app/routers/delivery_notes.py
 납품장 / 배송지시서 PDF API
 """
-from datetime import date
+from datetime import date, datetime, timedelta
 
+import pytz
 from fastapi import APIRouter, Depends, Query, HTTPException
+
+_KST = pytz.timezone('Asia/Seoul')
+
+
+def _today_kst() -> date:
+    return datetime.now(_KST).date()
 from fastapi.responses import Response
 from supabase import Client
 
@@ -42,7 +49,7 @@ def get_delivery_notes_pdf(
     ),
     svc: PdfService = Depends(get_service),
 ):
-    target = date or str(__import__("datetime").date.today() + __import__("datetime").timedelta(days=1))
+    target = date or str(_today_kst() + timedelta(days=1))
     try:
         pdf_bytes = svc.render_delivery_notes(target)
     except Exception as e:
@@ -80,7 +87,7 @@ def get_dispatch_sheet_pdf(
     ),
     svc: PdfService = Depends(get_service),
 ):
-    target = date or str(__import__("datetime").date.today() + __import__("datetime").timedelta(days=1))
+    target = date or str(_today_kst() + timedelta(days=1))
     try:
         pdf_bytes = svc.render_dispatch_sheet(target)
     except Exception as e:

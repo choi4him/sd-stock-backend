@@ -52,8 +52,10 @@ def get_stock_management_pdf(
     ),
     svc: PdfService = Depends(get_service),
 ):
-    import datetime as dt
-    target = date or str(dt.date.today())
+    from datetime import datetime as _dt
+    import pytz
+    _kst = pytz.timezone('Asia/Seoul')
+    target = date or str(_dt.now(_kst).date())
     try:
         pdf_bytes = svc.render_stock_management(
             record_date=target,

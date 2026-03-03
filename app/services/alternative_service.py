@@ -10,11 +10,18 @@ Priority 5: Claude AI                — 1~4 모두 부족 시만 호출
 """
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
+import pytz
 import psycopg2
+
+_KST = pytz.timezone('Asia/Seoul')
+
+
+def _today_kst() -> date:
+    return datetime.now(_KST).date()
 import psycopg2.extras
 from supabase import Client
 
@@ -52,7 +59,7 @@ class AlternativeService:
         date_from = str(d - timedelta(days=7))
         date_to   = str(d + timedelta(days=7))
         opposite_sex = "F" if sex == "M" else "M"
-        today = str(date.today())
+        today = str(_today_kst())
 
         conn = psycopg2.connect(os.environ.get("DATABASE_URL", ""))
         try:

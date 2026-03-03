@@ -6,9 +6,16 @@ FastAPI Lifespan에서 시작/종료합니다.
 """
 import logging
 import os
-from datetime import date
+from datetime import date, datetime
 
+import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+_KST = pytz.timezone('Asia/Seoul')
+
+
+def _today_kst() -> date:
+    return datetime.now(_KST).date()
 from apscheduler.triggers.cron import CronTrigger
 from supabase import create_client
 
@@ -51,7 +58,7 @@ async def auto_close_inquiries():
         logger.warning("[Scheduler] DB 클라이언트 없음 — auto_close_inquiries 생략")
         return
 
-    today = str(date.today())
+    today = str(_today_kst())
 
     # 오늘 날짜 + stage='inquiry' 건 조회
     res = (
